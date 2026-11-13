@@ -10,6 +10,163 @@ const btnClearSearch = document.getElementById('btn-clear-search');
 const libraryStatus = document.getElementById('library-status');
 const statusMsg = document.getElementById('status-msg');
 const toast = document.getElementById('toast');
+const libraryFileInput = document.getElementById('fileInput');
+const libraryUploadZone = document.getElementById('upload-zone');
+const uploadedBooksGrid = document.getElementById('uploaded-books-grid');
+const modalAuth = document.getElementById('modal-auth');
+const formAuth = document.getElementById('form-auth');
+const authEmail = document.getElementById('auth-email');
+const authSenha = document.getElementById('auth-senha');
+const btnAuthSubmit = document.getElementById('btn-auth-submit');
+const authTitle = document.getElementById('auth-title');
+const authToggleLink = document.getElementById('auth-toggle-link');
+const authToggleMsg = document.getElementById('auth-toggle-msg');
+const btnFecharAuth = document.getElementById('btn-fechar-auth');
+const UPLOADED_BOOKS_KEY = 'sr_uploaded_books';
+let modoCadastro = false;
+
+function isPdfFile(file) {
+  return !!file && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'));
+}
+
+function getUploadedBooks() {
+  try {
+    return JSON.parse(localStorage.getItem(UPLOADED_BOOKS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function setUploadedBooks(books) {
+  localStorage.setItem(UPLOADED_BOOKS_KEY, JSON.stringify(books));
+}
+
+function getUploadedBookKey(fileName) {
+  return `uploaded_pdf_${fileName.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+}
+
+function savePDFToIndexedDB(fileName, arrayBuffer, storageKey = 'current_pdf') {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('SmartReaderDB', 1);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('pdfs')) {
+        db.createObjectStore('pdfs');
+      }
+    };
+
+    request.onsuccess = (event) => {
+      try {
+        const db = event.target.result;
+        const tx = db.transaction('pdfs', 'readwrite');
+        tx.objectStore('pdfs').put(arrayBuffer, storageKey);
+        localStorage.setItem('sr_current_filename', fileName);
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function renderUploadedBooks() {
+  if (!uploadedBooksGrid) return;
+
+  const uploadedBooks = getUploadedBooks();
+
+  if (!uploadedBooks.length) {
+    uploadedBooksGrid.innerHTML = `
+      <div class="empty-state" style="padding: 1.2rem; border: 1px dashed var(--border); border-radius: 12px; background: rgba(255,255,255,0.02);">
+        <p style="margin: 0; color: var(--text-sec);">Nenhum PDF enviado ainda.</p>
+      </div>
+    `;
+    return;
+  }
+
+  uploadedBooksGrid.innerHTML = uploadedBooks.map((book) => `
+    <article class="book-card uploaded-book-card" tabindex="0" aria-label="Arquivo enviado: ${book.name}">
+      <div class="book-cover-placeholder" style="display:flex; align-items:center; justify-content:center; font-size: 2rem;">📄</div>
+      <h2 class="book-title">${book.name}</h2>
+      <p class="book-author">${book.sizeLabel}</p>
+      <button class="btn-action btn-read-book" aria-label="Abrir arquivo ${book.name}">Abrir</button>
+    </article>
+  `).join('');
+
+  uploadedBooksGrid.querySelectorAll('.btn-read-book').forEach((button, index) => {
+    button.addEventListener('click', async () => {
+      const fileName = uploadedBooks[index].name;
+      const bookKey = getUploadedBookKey(fileName);
+      try {
+        const db = await new Promise((resolve, reject) => {
+          const request = indexedDB.open('SmartReaderDB', 1);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+
+        const result = await new Promise((resolve, reject) => {
+          const tx = db.transaction('pdfs', 'readonly');
+          const req = tx.objectStore('pdfs').get(bookKey);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        });
+
+        if (!result) {
+          showToast('Arquivo não encontrado localmente.', 'error');
+          return;
+        }
+
+        await savePDFToIndexedDB(fileName, result, 'current_pdf');
+        localStorage.setItem('sr_current_filename', fileName);
+        window.location.href = 'leitor.html?uploaded=1';
+      } catch (error) {
+        console.error('Erro ao abrir arquivo salvo:', error);
+        showToast('Não foi possível abrir este PDF salvo.', 'error');
+      }
+    });
+  });
+}
+
+function syncUploadedBook(fileName, sizeInBytes) {
+  const uploadedBooks = getUploadedBooks();
+  const exists = uploadedBooks.some((book) => book.name === fileName);
+
+  if (!exists) {
+    uploadedBooks.unshift({
+      name: fileName,
+      sizeLabel: `${(sizeInBytes / 1024).toFixed(0)} KB`,
+      uploadedAt: new Date().toISOString()
+    });
+    setUploadedBooks(uploadedBooks.slice(0, 10));
+  }
+
+  renderUploadedBooks();
+}
+
+function openUploadedPDF(file) {
+  if (!isPdfFile(file)) {
+    showToast('Selecione um arquivo PDF válido.', 'error');
+    return;
+  }
+
+  showToast('Abrindo documento no leitor...', 'success');
+
+  file.arrayBuffer()
+    .then(async (buffer) => {
+      const bookKey = getUploadedBookKey(file.name);
+      await savePDFToIndexedDB(file.name, buffer, 'current_pdf');
+      await savePDFToIndexedDB(file.name, buffer, bookKey);
+      syncUploadedBook(file.name, file.size);
+      localStorage.setItem('sr_current_filename', file.name);
+      window.location.href = 'leitor.html?uploaded=1';
+    })
+    .catch((error) => {
+      console.error('Erro ao abrir PDF enviado:', error);
+      showToast('Não foi possível abrir este PDF.', 'error');
+    });
+}
 
 /* ─── SHOW TOAST ─── */
 function showToast(msg, type = '') {
@@ -195,9 +352,114 @@ function initTheme() {
   });
 }
 
+if (libraryFileInput && libraryUploadZone) {
+  libraryFileInput.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      openUploadedPDF(file);
+    }
+  });
+
+  libraryUploadZone.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    libraryUploadZone.classList.add('drag-over');
+  });
+
+  libraryUploadZone.addEventListener('dragleave', () => {
+    libraryUploadZone.classList.remove('drag-over');
+  });
+
+  libraryUploadZone.addEventListener('drop', (event) => {
+    event.preventDefault();
+    libraryUploadZone.classList.remove('drag-over');
+    const file = event.dataTransfer?.files?.[0];
+    if (file) {
+      openUploadedPDF(file);
+    }
+  });
+
+  libraryUploadZone.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      libraryFileInput.click();
+    }
+  });
+}
+
+async function atualizarInterfaceUsuario() {
+  const btnConta = document.querySelectorAll('section.sidebar-section button').length
+    ? Array.from(document.querySelectorAll('section.sidebar-section button')).find(b => b.textContent.includes('Entrar') || b.textContent.includes('Sair'))
+    : null;
+
+  if (!btnConta || !window.supabaseClient) return;
+
+  try {
+    const { data: { user } } = await window.supabaseClient.auth.getUser();
+
+    if (user) {
+      const nomeUsuario = user.email.split('@')[0];
+      btnConta.innerText = `👤 ${nomeUsuario} (Sair)`;
+      btnConta.onclick = fazerLogout;
+    } else {
+      btnConta.innerText = '👤 Entrar / Cadastrar';
+      btnConta.onclick = abrirLogin;
+    }
+  } catch (error) {
+    console.error('Erro ao atualizar estado do usuário:', error);
+  }
+}
+
+async function fazerLogout() {
+  if (!window.supabaseClient) return;
+  await window.supabaseClient.auth.signOut();
+  alert('Você saiu da conta.');
+  atualizarInterfaceUsuario();
+}
+
+authToggleLink?.addEventListener('click', (e) => {
+  e.preventDefault();
+  modoCadastro = !modoCadastro;
+  authTitle.innerText = modoCadastro ? 'Criar Conta' : 'Entrar';
+  btnAuthSubmit.innerText = modoCadastro ? 'Cadastrar' : 'Entrar';
+  authToggleMsg.innerText = modoCadastro ? 'Já tem conta?' : 'Não tem conta?';
+  authToggleLink.innerText = modoCadastro ? 'Fazer Login' : 'Criar conta';
+});
+
+btnFecharAuth?.addEventListener('click', () => {
+  if (modalAuth) modalAuth.style.display = 'none';
+});
+
+formAuth?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = authEmail.value;
+  const password = authSenha.value;
+
+  try {
+    if (modoCadastro) {
+      const { error } = await window.supabaseClient.auth.signUp({ email, password });
+      if (error) throw error;
+      alert('Conta criada com sucesso!');
+    } else {
+      const { error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      alert('Login realizado!');
+    }
+    modalAuth.style.display = 'none';
+    atualizarInterfaceUsuario();
+  } catch (err) {
+    alert('Erro: ' + err.message);
+  }
+});
+
+function abrirLogin() {
+  if (modalAuth) modalAuth.style.display = 'flex';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   fetchLivros();
+  renderUploadedBooks();
+  setTimeout(atualizarInterfaceUsuario, 300);
 });
 
 // Atualiza quando o usuário volta para a biblioteca

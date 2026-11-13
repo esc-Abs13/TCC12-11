@@ -736,36 +736,58 @@ setTTSState('idle');
   }
 
   const savedName = localStorage.getItem('sr_current_filename');
+  const arrayBuffer = await loadPDFFromStorage();
 
-  if (savedName) {
+  if (parametros.get("uploaded") === "1" && arrayBuffer) {
+    setStatus('Abrindo PDF enviado…');
+    state.fileName = savedName || 'arquivo.pdf';
+    state.ocrProcessed.clear();
+    state.ocrText = '';
+
+    docTitle.textContent = state.fileName;
+    fileInfo.textContent = `${state.fileName} (Arquivo enviado)`;
+
+    const typedarray = new Uint8Array(arrayBuffer);
+
+    pdfjsLib.getDocument(typedarray).promise.then(pdf => {
+      state.pdfDoc = pdf;
+      state.pageNum = 1;
+      pageTotal.textContent = pdf.numPages;
+      pageInput.max = pdf.numPages;
+      enableControls(true);
+      renderPage(state.pageNum);
+      showToast('PDF aberto com sucesso.', 'success');
+    }).catch(() => {
+      setStatus('Pronto');
+    });
+    return;
+  }
+
+  if (savedName && arrayBuffer) {
     setStatus('Restaurando sessão anterior…');
 
-    const arrayBuffer = await loadPDFFromStorage();
+    state.fileName = savedName;
+    state.ocrProcessed.clear();
+    state.ocrText = '';
 
-    if (arrayBuffer) {
-      state.fileName = savedName;
-      state.ocrProcessed.clear();
-      state.ocrText = '';
+    docTitle.textContent = savedName;
+    fileInfo.textContent = `${savedName} (Sessão Restaurada)`;
 
-      docTitle.textContent = savedName;
-      fileInfo.textContent = `${savedName} (Sessão Restaurada)`;
+    const typedarray = new Uint8Array(arrayBuffer);
 
-      const typedarray = new Uint8Array(arrayBuffer);
-
-      pdfjsLib.getDocument(typedarray).promise.then(pdf => {
-        state.pdfDoc = pdf;
-        state.pageNum = loadProgress(savedName) || 1;
-        pageTotal.textContent = pdf.numPages;
-        pageInput.max = pdf.numPages;
-        enableControls(true);
-        renderPage(state.pageNum);
-        showToast('Sessão restaurada com sucesso.', 'success');
-      }).catch(() => {
-        setStatus('Pronto');
-      });
-    } else {
+    pdfjsLib.getDocument(typedarray).promise.then(pdf => {
+      state.pdfDoc = pdf;
+      state.pageNum = loadProgress(savedName) || 1;
+      pageTotal.textContent = pdf.numPages;
+      pageInput.max = pdf.numPages;
+      enableControls(true);
+      renderPage(state.pageNum);
+      showToast('Sessão restaurada com sucesso.', 'success');
+    }).catch(() => {
       setStatus('Pronto');
-    }
+    });
+  } else {
+    setStatus('Pronto');
   }
 })();
 

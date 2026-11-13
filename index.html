@@ -41,6 +41,22 @@
         </svg>
       </button>
     </div>
+    
+    <!-- Upload -->
+    <section class="sidebar-section" aria-labelledby="section-upload">
+      <h2 class="section-label" id="section-upload">Documento</h2>
+      <label class="upload-zone" id="upload-zone" for="fileInput" tabindex="0" role="button" aria-describedby="upload-hint">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 16V8M12 8L9 11M12 8L15 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M20 16.5A3.5 3.5 0 0 0 16.5 13H15a5 5 0 1 0-9.9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span class="upload-label">Abrir PDF</span>
+        <span class="upload-hint" id="upload-hint">Clique ou arraste aqui</span>
+        <input type="file" id="fileInput" accept="application/pdf" aria-label="Selecionar arquivo PDF" style="display:none">
+      </label>
+      <div id="file-info" class="file-info" aria-live="polite" aria-atomic="true"></div>
+    </section>
+
 
     <!-- Navegação do Sistema -->
     <section class="sidebar-section" aria-labelledby="section-menu">
@@ -143,12 +159,23 @@
   </p>
 </div>
 
-        <!-- Status e Contador para Leitores de Tela -->
-        <div id="library-status" class="status-count" aria-live="polite" aria-atomic="true">
-          Buscando acervo no servidor...
-        </div>
+        <section class="uploaded-section" aria-labelledby="uploaded-section-title" style="margin: 1.5rem 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+            <h2 id="uploaded-section-title" style="margin: 0; color: var(--text-primary); font-size: 1.2rem;">Meus arquivos</h2>
+          </div>
+          <div id="uploaded-books-grid" class="books-grid" aria-label="Lista de arquivos enviados pelo usuário">
+            <!-- Cards de PDFs enviados localmente -->
+          </div>
+        </section>
 
         <!-- Grid de Livros -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+            <h2 id="books-section-title" style="margin: 0; color: var(--text-primary); font-size: 1.2rem;">Biblioteca online</h2>
+          </div>
+          <!-- Status e Contador para Leitores de Tela -->
+            <div id="library-status" class="status-count" aria-live="polite" aria-atomic="true">
+              Buscando acervo no servidor...
+            </div>
         <section id="books-grid" class="books-grid" aria-label="Lista de livros disponíveis">
           <!-- Cards gerados via JS -->
         </section>
